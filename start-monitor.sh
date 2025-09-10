@@ -1,3 +1,27 @@
+#!/bin/bash
+# File: start-monitor.sh
+
+echo "🚀 Universal Market Monitor - Quick Start"
+echo "========================================="
+echo ""
+
+# Check if Node.js is installed
+if ! command -v node &> /dev/null; then
+    echo "❌ Node.js is not installed!"
+    echo "Please install Node.js from: https://nodejs.org/"
+    exit 1
+fi
+
+echo "✅ Node.js found: $(node --version)"
+echo ""
+
+# Create directory structure
+echo "📁 Setting up project structure..."
+mkdir -p src
+
+# Create the main monitor file
+echo "📝 Creating monitor script..."
+cat > src/universal-monitor.js << 'ENDOFFILE'
 // File: src/universal-monitor.js
 // FIXED VERSION - Monitors ALL stocks and cryptos for 9-13% gains in 2-minute windows
 
@@ -506,7 +530,7 @@ app.get('/api/assets', (req, res) => {
 // ============= WEB DASHBOARD =============
 
 app.get('/', (req, res) => {
-  res.send(`
+  res.send(\`
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -756,286 +780,3 @@ app.get('/', (req, res) => {
       background: #ff5252;
       color: white;
     }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>🌍 Universal Market Monitor</h1>
-    <div class="subtitle">Tracking ALL Stocks & Cryptocurrencies for 9-13% gains in 2-minute windows</div>
-  </div>
-  
-  <div class="stats">
-    <div class="stat">
-      <div class="stat-value" id="total-assets">0</div>
-      <div class="stat-label">Total Assets</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" id="total-stocks">0</div>
-      <div class="stat-label">Stocks</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" id="total-crypto">0</div>
-      <div class="stat-label">Cryptocurrencies</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" id="active-alerts">0</div>
-      <div class="stat-label">Active Alerts</div>
-    </div>
-  </div>
-  
-  <div class="container">
-    <div class="alerts-header">
-      <div class="alerts-title">🚨 Active Alerts (9-13% in 2 minutes)</div>
-      <div class="scan-status pulse" id="scan-status">Scanning...</div>
-    </div>
-    
-    <div class="alerts-grid" id="alerts-grid">
-      <div class="no-alerts">
-        <div class="pulse">Monitoring all markets for 9-13% gains...</div>
-        <div style="margin-top: 10px; font-size: 14px; color: #888;">
-          Alerts will appear here when detected
-        </div>
-      </div>
-    </div>
-  </div>
-  
-  <div class="connection-status disconnected" id="connection-status">
-    Connecting...
-  </div>
-  
-  <script>
-    const ws = new WebSocket('ws://localhost:3001');
-    let alerts = [];
-    let stats = {};
-    
-    ws.onopen = () => {
-      console.log('Connected to monitor');
-      document.getElementById('connection-status').className = 'connection-status connected';
-      document.getElementById('connection-status').textContent = '🟢 Connected';
-    };
-    
-    ws.onclose = () => {
-      document.getElementById('connection-status').className = 'connection-status disconnected';
-      document.getElementById('connection-status').textContent = '🔴 Disconnected';
-      setTimeout(() => location.reload(), 3000);
-    };
-    
-    ws.onmessage = (event) => {
-      const message = JSON.parse(event.data);
-      
-      switch(message.type) {
-        case 'snapshot':
-          if (message.alerts) {
-            alerts = message.alerts;
-            renderAlerts();
-          }
-          if (message.stats) {
-            updateStats(message.stats);
-          }
-          break;
-          
-        case 'alert':
-          addOrUpdateAlert(message.data);
-          break;
-          
-        case 'alert_removed':
-          removeAlert(message.symbol);
-          break;
-          
-        case 'stats':
-          updateStats(message.data);
-          break;
-      }
-    };
-    
-    function addOrUpdateAlert(alert) {
-      const index = alerts.findIndex(a => a.symbol === alert.symbol);
-      if (index >= 0) {
-        alerts[index] = alert;
-      } else {
-        alerts.unshift(alert);
-        
-        // Show browser notification
-        if (Notification.permission === 'granted') {
-          new Notification('🚨 New Alert: ' + alert.symbol, {
-            body: 'Gained ' + alert.changePercent2Min.toFixed(2) + '% in 2 minutes!',
-            icon: '/favicon.ico'
-          });
-        }
-      }
-      renderAlerts();
-    }
-    
-    function removeAlert(symbol) {
-      alerts = alerts.filter(a => a.symbol !== symbol);
-      renderAlerts();
-    }
-    
-    function updateStats(data) {
-      stats = data;
-      document.getElementById('total-assets').textContent = data.totalAssets || 0;
-      document.getElementById('total-stocks').textContent = data.stocks || 0;
-      document.getElementById('total-crypto').textContent = data.cryptos || 0;
-      document.getElementById('active-alerts').textContent = data.activeAlerts || 0;
-      
-      if (data.lastScan) {
-        const scanTime = new Date(data.lastScan).toLocaleTimeString();
-        document.getElementById('scan-status').textContent = 'Last scan: ' + scanTime;
-      }
-    }
-    
-    function renderAlerts() {
-      const grid = document.getElementById('alerts-grid');
-      document.getElementById('active-alerts').textContent = alerts.length;
-      
-      if (alerts.length === 0) {
-        grid.innerHTML = \`
-          <div class="no-alerts">
-            <div class="pulse">Monitoring all markets for 9-13% gains...</div>
-            <div style="margin-top: 10px; font-size: 14px; color: #888;">
-              Alerts will appear here when detected
-            </div>
-          </div>
-        \`;
-        return;
-      }
-      
-      // Sort by change percentage
-      alerts.sort((a, b) => b.changePercent2Min - a.changePercent2Min);
-      
-      grid.innerHTML = alerts.map(alert => {
-        const price = alert.currentPrice < 1 
-          ? alert.currentPrice.toFixed(6) 
-          : alert.currentPrice.toFixed(2);
-        
-        const minPrice = alert.minPrice < 1
-          ? alert.minPrice.toFixed(6)
-          : alert.minPrice.toFixed(2);
-          
-        const maxPrice = alert.maxPrice < 1
-          ? alert.maxPrice.toFixed(6)
-          : alert.maxPrice.toFixed(2);
-        
-        return \`
-          <div class="alert-card \${alert.type}">
-            <div class="alert-header">
-              <div class="alert-symbol">\${alert.symbol}</div>
-              <div class="alert-type \${alert.type}">\${alert.type}</div>
-            </div>
-            
-            <div class="alert-price">$\${price}</div>
-            <div class="alert-change">+\${alert.changePercent2Min.toFixed(2)}%</div>
-            
-            <div class="alert-details">
-              <div class="detail-item">
-                <div class="detail-label">2min Low</div>
-                <div class="detail-value">$\${minPrice}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">2min High</div>
-                <div class="detail-value">$\${maxPrice}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Data Points</div>
-                <div class="detail-value">\${alert.dataPoints || 'N/A'}</div>
-              </div>
-              <div class="detail-item">
-                <div class="detail-label">Source</div>
-                <div class="detail-value">\${alert.source || 'N/A'}</div>
-              </div>
-            </div>
-            
-            <div class="alert-time">
-              Detected at \${alert.alertTime || new Date(alert.timestamp).toLocaleTimeString()}
-            </div>
-          </div>
-        \`;
-      }).join('');
-    }
-    
-    // Request notification permission
-    if (Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-    
-    // Update every second
-    setInterval(() => {
-      const now = new Date().toLocaleTimeString();
-      if (alerts.length === 0) {
-        document.getElementById('scan-status').textContent = 'Scanning... ' + now;
-      }
-    }, 1000);
-  </script>
-</body>
-</html>
-  `);
-});
-
-// ============= START THE MONITOR =============
-
-async function start() {
-  console.log(chalk.cyan('\n🚀 Starting Universal Market Monitor...\n'));
-  
-  server.listen(CONFIG.PORT, () => {
-    console.log(chalk.green.bold(`
-╔════════════════════════════════════════════════════════════╗
-║                    ✅ SYSTEM READY                        ║
-║                                                            ║
-║   Dashboard:     http://localhost:${CONFIG.PORT}                     ║
-║   WebSocket:     ws://localhost:${CONFIG.PORT}                       ║
-║                                                            ║
-║   Monitoring:    ALL stocks and cryptocurrencies          ║
-║   Threshold:     ${CONFIG.THRESHOLD_MIN}-${CONFIG.THRESHOLD_MAX}% gains in 2 minutes        ║
-║   Scan Rate:     Every ${CONFIG.SCAN_INTERVAL/1000} seconds                        ║
-║                                                            ║
-║   Data Sources:                                           ║
-║   • NASDAQ & NYSE (official data)                         ║
-║   • CoinGecko (500+ cryptos)                             ║
-║   • Binance (additional cryptos)                          ║
-║   • CoinCap (more cryptos)                               ║
-║                                                            ║
-║   💡 100% FREE - No API keys required!                    ║
-╚════════════════════════════════════════════════════════════╝
-    `));
-  });
-  
-  // Initial scan
-  console.log(chalk.cyan('📊 Starting initial market scan...'));
-  await monitorAllAssets();
-  
-  // Schedule regular scans
-  setInterval(monitorAllAssets, CONFIG.SCAN_INTERVAL);
-  
-  // Show periodic stats
-  setInterval(() => {
-    console.log(chalk.gray(`
-📊 Monitor Stats:
-  • Active Alerts: ${activeAlerts.size}
-  • Price Histories: ${priceHistory.size}
-  • Connected Clients: ${clients.size}
-  • Uptime: ${Math.floor(process.uptime() / 60)} minutes
-    `));
-  }, 60000); // Every minute
-}
-
-// Error handling
-process.on('uncaughtException', (error) => {
-  console.error(chalk.red('Fatal error:'), error);
-  process.exit(1);
-});
-
-process.on('unhandledRejection', (error) => {
-  console.error(chalk.red('Unhandled rejection:'), error);
-});
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  console.log(chalk.yellow('\n\nShutting down gracefully...'));
-  server.close(() => {
-    console.log(chalk.green('Server closed'));
-    process.exit(0);
-  });
-});
-
-// Start the application
-start();
