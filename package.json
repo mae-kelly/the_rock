@@ -1,17 +1,14 @@
 {
-  "name": "universal-market-monitor",
-  "version": "2.0.0",
-  "description": "Monitor ALL stocks and cryptocurrencies for 9-13% gains",
-  "main": "src/monitor.js",
+  "name": "webull-complete-monitor",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "node src/monitor.js",
-    "dev": "node --watch src/monitor.js"
+    "start": "node webull-monitor.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.16.0",
-    "axios": "^1.6.5",
-    "chalk": "^5.3.0"
+    "axios": "^1.11.0",
+    "chalk": "^5.6.2",
+    "express": "^4.21.2",
+    "ws": "^8.18.3"
   }
 }
