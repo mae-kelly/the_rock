@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # C++ Engine - Core processing
+  cpp-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile.cpp
+    container_name: stock-monitor-engine
+    restart: unless-stopped
+    environment:
+      - ALPACA_KEY_ID=${ALPACA_KEY_ID}
+      - ALPACA_SECRET_KEY=${ALPACA_SECRET_KEY}
+    command: >
+      ./stock_monitor_engine
+      --key ${ALPACA_KEY_ID}
+      --secret ${ALPACA_SECRET_KEY}
+      --port 8080
+      --threshold-min 9.0
+      --threshold-max 13.0
+      --buffer-size 120
+      --max-stocks 10000
+    ports:
+      - "8080:8080"
+    networks:
+      - stock-network
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 4G
+        reservations:
+          cpus: '2'
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: stock-monitor-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - stock-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # Node.js API Server
+  api-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.node
+    container_name: stock-monitor-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CPP_ENGINE_HOST=cpp-engine
+      - CPP_ENGINE_PORT=8080
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+    ports:
+      - "3001:3001"
+    depends_on:
+      - cpp-engine
+      - redis
+    networks:
+      - stock-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx for load balancing and SSL
+  nginx:
+    image: nginx:alpine
+    container_name: stock-monitor-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - api-server
+    networks:
+      - stock-network
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: stock-monitor-prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+    networks:
+      - stock-network
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: stock-monitor-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - stock-network
+
+networks:
+  stock-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  prometheus-data:
+  grafana-data:
